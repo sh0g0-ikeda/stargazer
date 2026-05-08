@@ -383,6 +383,23 @@ class CastorOpsApiFacade:
             return ApiResponse.failed(exc, request_id=request_id)
         return ApiResponse.ok(payload, request_id=request_id)
 
+    async def latest_architecture(
+        self,
+        *,
+        project_id: str,
+        request_id: str | None = None,
+    ) -> ApiResponse:
+        if self._architecture_service is None:
+            return ApiResponse.failed(
+                ValidationAppError("architecture service is not configured"),
+                request_id=request_id,
+            )
+        try:
+            payload = await self._architecture_service.latest_payload(project_id)
+        except AppError as exc:
+            return ApiResponse.failed(exc, request_id=request_id)
+        return ApiResponse.ok(payload, request_id=request_id)
+
     async def preview_architecture_node_update(
         self,
         *,

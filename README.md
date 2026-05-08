@@ -14,6 +14,7 @@ Implemented:
 - Approval gates for requirements, design, and architecture.
 - Architecture proposal validation and editable node updates.
 - Target FastAPI app package generation.
+- Deterministic Cloud Build apply plan rendering.
 - Local Cloud Build deployment simulation.
 - Ops dashboard summary sections.
 - Timeline events and SSE event encoding helpers.
@@ -66,6 +67,18 @@ Run only the requirement workflow demo:
 python scripts\run_requirement_demo.py --idea "support desk app"
 ```
 
+Serve the local browser demo:
+
+```powershell
+python scripts\serve_demo.py --host 127.0.0.1 --port 8080 --target-project-id demo-gcp-project
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8080
+```
+
 ## Repository Layout
 
 ```text
@@ -85,10 +98,12 @@ app/
   streaming/       SSE encoding helpers.
   timeline/        User-facing timeline events.
   tools/           Guarded tool execution runtime.
+  web/             Dependency-free local demo HTTP server and static UI.
   workflows/       Requirement, design, planning, security, apply, and demo workflows.
 scripts/
   run_full_demo.py
   run_requirement_demo.py
+  serve_demo.py
 tests/
   unittest-based behavior tests.
 ```

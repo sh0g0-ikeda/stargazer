@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CastorOps Demo</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>CastorOps</h1>
+        <p>Local demo workspace for AI-assisted GCP design, deploy, and ops review.</p>
+      </div>
+      <div class="status" id="serverStatus">Checking server</div>
+    </header>
+
+    <main class="layout">
+      <section class="panel intake">
+        <h2>Project Intake</h2>
+        <label>
+          Project name
+          <input id="projectName" value="Support Desk Demo">
+        </label>
+        <label>
+          Idea
+          <textarea id="projectIdea">Build a support desk API that stores tickets, exposes health checks, and can be deployed on Cloud Run.</textarea>
+        </label>
+        <label>
+          Target GCP project id
+          <input id="targetProjectId" value="demo-gcp-project">
+        </label>
+        <div class="buttonRow">
+          <button id="createProjectButton">Create Project</button>
+          <button id="runDemoButton">Run Demo Flow</button>
+        </div>
+        <dl class="facts">
+          <div>
+            <dt>Project ID</dt>
+            <dd id="projectId">-</dd>
+          </div>
+          <div>
+            <dt>Phase</dt>
+            <dd id="projectPhase">-</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="panel steps">
+        <h2>Pipeline</h2>
+        <div class="stepGrid">
+          <button data-step="follow-up">Follow-up</button>
+          <button data-step="requirements">Requirements</button>
+          <button data-step="approve-requirements">Approve Requirements</button>
+          <button data-step="designs">Design Docs</button>
+          <button data-step="approve-design">Approve Design</button>
+          <button data-step="architecture">Architecture</button>
+          <button data-step="security">Security</button>
+          <button data-step="approve-architecture">Approve Architecture</button>
+          <button data-step="target-app">Target App</button>
+          <button data-step="apply">Apply</button>
+          <button data-step="ops">Ops Dashboard</button>
+          <button data-step="timeline">Timeline</button>
+        </div>
+      </section>
+
+      <section class="panel architecture">
+        <h2>Architecture Map</h2>
+        <div id="architectureMap" class="map empty">No architecture yet</div>
+        <form id="nodeEditForm" class="nodeEditor">
+          <h3>Edit Cloud Run Node</h3>
+          <label>
+            Node ID
+            <input id="nodeId" value="backend">
+          </label>
+          <label>
+            Memory
+            <select id="nodeMemory">
+              <option value="256Mi">256Mi</option>
+              <option value="512Mi" selected>512Mi</option>
+              <option value="1Gi">1Gi</option>
+            </select>
+          </label>
+          <label>
+            CPU
+            <select id="nodeCpu">
+              <option value="1" selected>1</option>
+              <option value="2">2</option>
+            </select>
+          </label>
+          <label class="checkboxLabel">
+            <input id="allowUnauthenticated" type="checkbox">
+            Allow unauthenticated access
+          </label>
+          <div class="buttonRow">
+            <button type="button" id="previewNodeButton">Preview Impact</button>
+            <button type="submit">Save Draft</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel ops">
+        <h2>Ops Dashboard</h2>
+        <div id="opsDashboard" class="dashboard empty">Run the pipeline to populate ops sections.</div>
+      </section>
+
+      <section class="panel output">
+        <h2>Latest Response</h2>
+        <pre id="responseOutput">{}</pre>
+      </section>
+    </main>
+
+    <script src="/assets/app.js"></script>
+  </body>
+</html>

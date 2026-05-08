@@ -8,6 +8,7 @@ from typing import Protocol
 from uuid import uuid4
 
 from app.deployments.models import BuildStatus
+from app.deployments.pipeline import render_cloud_run_apply_plan
 
 
 @dataclass(frozen=True)
@@ -31,25 +32,16 @@ class LocalCloudBuildAdapter:
     """Deterministic local adapter used until real GCP credentials are configured."""
 
     async def trigger_apply(self, *, architecture_payload: dict[str, Any]) -> BuildResult:
-        spec = architecture_payload["spec"]
-        target_project_id = spec["project_id"]
-        service_name = _service_name(spec)
-        deployed_url = f"https://{service_name}-{target_project_id}.run.app"
+        plan = render_cloud_run_apply_plan(architecture_payload=architecture_payload)
         return BuildResult(
             build_id=f"local-build-{uuid4()}",
             status=BuildStatus.SUCCEEDED,
-            deployed_url=deployed_url,
+            deployed_url=plan.deployed_url,
             logs=(
-                "rendered cloudbuild.yaml",
-                "validated gcloud command sequence",
+                f"rendered cloudbuild.yaml for {plan.service_name}",
+                f"image: {plan.image_uri}",
+                f"validated {len(plan.gcloud_commands)} gcloud command(s)",
                 "simulated Cloud Build success",
-                f"published url: {deployed_url}",
+                f"published url: {plan.deployed_url}",
             ),
         )
-
-
-def _service_name(spec: dict[str, Any]) -> str:
-    for node in spec.get("nodes", []):
-        if node.get("type") == "cloud_run":
-            return str(node.get("id", "target")).replace("_", "-")
-    return "target"
