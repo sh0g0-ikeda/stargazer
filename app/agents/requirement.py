@@ -41,6 +41,16 @@ class RequirementOutput:
         }
 
 
+@dataclass(frozen=True)
+class FollowUpQuestionOutput:
+    """Validated follow-up question output returned by RequirementAgent."""
+
+    follow_up_questions: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"follow_up_questions": list(self.follow_up_questions)}
+
+
 class RequirementAgent:
     """Generate a requirements document from project intake data."""
 
@@ -78,6 +88,34 @@ class RequirementAgent:
 
         await context.progress(90, "requirements ready")
         return requirement_output.to_dict()
+
+
+class RequirementQuestionAgent:
+    """Generate up to three follow-up questions from project intake data."""
+
+    def __init__(self, generator: RequirementGenerator) -> None:
+        self._generator = generator
+
+    async def run(self, context: AgentExecutionContext) -> dict[str, Any]:
+        await context.progress(15, "validating follow-up input")
+        request = _parse_generation_request(context.input_snapshot)
+
+        read_decision = await context.request_tool(
+            "read_project",
+            {"project_id": context.run.project_id},
+        )
+        if not read_decision.allowed:
+            raise PermissionError(read_decision.message)
+
+        await context.progress(35, "generating follow-up questions")
+        generated_output = await self._generator.generate(request)
+        if not isinstance(generated_output, Mapping):
+            raise ValidationAppError("requirement generator output must be an object")
+
+        await context.progress(80, "validating follow-up questions")
+        follow_up_output = _parse_follow_up_question_output(generated_output)
+        await context.progress(90, "follow-up questions ready")
+        return follow_up_output.to_dict()
 
 
 def _parse_generation_request(payload: Mapping[str, Any]) -> RequirementGenerationRequest:
@@ -129,3 +167,20 @@ def _parse_requirement_output(payload: Mapping[str, Any]) -> RequirementOutput:
         requirements_doc_md=requirements_doc_md.strip(),
         unresolved_items=normalized_unresolved_items,
     )
+
+
+def _parse_follow_up_question_output(payload: Mapping[str, Any]) -> FollowUpQuestionOutput:
+    follow_up_questions = payload.get("follow_up_questions", [])
+    if not isinstance(follow_up_questions, list):
+        raise ValidationAppError("follow_up_questions must be a list")
+    if len(follow_up_questions) > 3:
+        raise ValidationAppError("follow_up_questions must contain at most 3 questions")
+
+    normalized_questions: list[str] = []
+    for question in follow_up_questions:
+        if not isinstance(question, str):
+            raise ValidationAppError("follow_up_questions must contain only strings")
+        if question.strip():
+            normalized_questions.append(question.strip())
+
+    return FollowUpQuestionOutput(follow_up_questions=normalized_questions)

@@ -16,6 +16,9 @@ class SecurityFindingRepository(Protocol):
     async def list_by_target(self, project_id: str, target_type: str, target_id: str) -> list[SecurityFinding]:
         """Return findings for a target."""
 
+    async def list_by_project(self, project_id: str) -> list[SecurityFinding]:
+        """Return findings for a project."""
+
 
 class InMemorySecurityFindingRepository:
     """Local security finding repository used by tests and early development."""
@@ -33,4 +36,11 @@ class InMemorySecurityFindingRepository:
             if finding.project_id == project_id
             and finding.target_type == target_type
             and finding.target_id == target_id
+        ]
+
+    async def list_by_project(self, project_id: str) -> list[SecurityFinding]:
+        return [
+            finding
+            for finding in self._findings
+            if finding.project_id == project_id
         ]

@@ -3,6 +3,7 @@ from typing import Any
 
 from app.agents.requirement import RequirementAgent
 from app.agents.requirement import RequirementGenerationRequest
+from app.agents.requirement import RequirementQuestionAgent
 from app.agents.roles import REQUIREMENT_AGENT
 from app.agents.runtime import AgentRuntime
 from app.agents.runtime import InMemoryAgentStore
@@ -128,6 +129,38 @@ class RequirementAgentTests(unittest.IsolatedAsyncioTestCase):
                 "idea": "問い合わせ管理アプリ",
                 "form_responses": {},
                 "follow_up_answers": {"auth": 123},
+            },
+        )
+
+        self.assertEqual(run.status, AgentRunStatus.FAILED)
+        self.assertEqual(run.error_code, "ValidationAppError")
+
+    async def test_requirement_question_agent_validates_question_limit(self) -> None:
+        generator = StaticRequirementGenerator(
+            {
+                "follow_up_questions": [
+                    "認証方式は何ですか。",
+                    "保存データは何ですか。",
+                    "公開範囲はどこまでですか。",
+                    "予算はいくらですか。",
+                ]
+            }
+        )
+        store = InMemoryAgentStore()
+        runtime = AgentRuntime(
+            store=store,
+            tool_guard=ToolGuard(DEFAULT_TOOL_DEFINITIONS),
+        )
+
+        run = await runtime.run_agent(
+            project_id="project-1",
+            project_phase="REQUIREMENT_DRAFT",
+            role=REQUIREMENT_AGENT,
+            agent_path="/root/requirement_question_agent",
+            agent=RequirementQuestionAgent(generator),
+            input_snapshot={
+                "idea": "問い合わせ管理アプリ",
+                "form_responses": {},
             },
         )
 

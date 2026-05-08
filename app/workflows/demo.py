@@ -35,10 +35,17 @@ class DemoRequirementGenerator:
 
     async def generate(self, request: RequirementGenerationRequest) -> dict[str, Any]:
         unresolved_items = []
+        follow_up_questions = []
         if "auth" not in request.follow_up_answers:
             unresolved_items.append("認証方式")
+            follow_up_questions.append("ログイン機能は必要ですか。必要な場合は方式も教えてください。")
+        if not request.form_responses.get("data_storage"):
+            follow_up_questions.append("保存したいデータの種類と保持期間を教えてください。")
+        if not request.form_responses.get("public_scope"):
+            follow_up_questions.append("公開範囲は社内限定、招待制、一般公開のどれを想定していますか。")
 
         return {
+            "follow_up_questions": follow_up_questions[:3],
             "requirements_doc_md": _build_requirements_doc(request, unresolved_items),
             "unresolved_items": unresolved_items,
         }

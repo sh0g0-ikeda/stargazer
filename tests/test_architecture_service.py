@@ -106,6 +106,62 @@ class ArchitectureServiceTests(unittest.IsolatedAsyncioTestCase):
                 gcloud_commands=(" ",),
             )
 
+    async def test_editable_node_parameters_returns_allowed_fields(self) -> None:
+        service = ArchitectureService(InMemoryArchitectureRepository())
+        await service.create_next_proposal(
+            project_id="project-1",
+            spec_payload=valid_spec(),
+            rationale_md="採用理由",
+            cloudbuild_yaml="steps: []",
+            gcloud_commands=("gcloud run services list",),
+        )
+
+        payload = await service.editable_node_parameters(
+            project_id="project-1",
+            node_id="backend",
+        )
+
+        self.assertIn("memory", payload["editable_fields"])
+        self.assertEqual(payload["current_parameters"]["memory"], "512Mi")
+
+    async def test_update_node_creates_new_proposal_version(self) -> None:
+        service = ArchitectureService(InMemoryArchitectureRepository())
+        await service.create_next_proposal(
+            project_id="project-1",
+            spec_payload=valid_spec(),
+            rationale_md="採用理由",
+            cloudbuild_yaml="steps: []",
+            gcloud_commands=("gcloud run services list",),
+        )
+
+        proposal = await service.create_updated_node_proposal(
+            project_id="project-1",
+            node_id="backend",
+            parameter_patch={"memory": "1Gi"},
+            change_reason="デモ負荷に備える",
+        )
+
+        self.assertEqual(proposal.version, 2)
+        self.assertEqual(proposal.spec.nodes[0].parameters["memory"], "1Gi")
+
+    async def test_delete_node_requires_confirmation(self) -> None:
+        service = ArchitectureService(InMemoryArchitectureRepository())
+        await service.create_next_proposal(
+            project_id="project-1",
+            spec_payload=valid_spec(),
+            rationale_md="採用理由",
+            cloudbuild_yaml="steps: []",
+            gcloud_commands=("gcloud run services list",),
+        )
+
+        with self.assertRaises(ValidationAppError):
+            await service.create_deleted_node_proposal(
+                project_id="project-1",
+                node_id="backend",
+                confirmed=False,
+                change_reason="不要になった",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

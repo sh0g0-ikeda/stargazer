@@ -6,9 +6,12 @@ from typing import Any
 
 from app.architectures.models import ArchitectureEdge
 from app.architectures.models import ArchitectureNode
+from app.architectures.models import ArchitectureNodeType
 from app.architectures.models import ArchitectureProposal
 from app.architectures.models import parse_architecture_spec
 from app.architectures.repository import ArchitectureRepository
+from app.core.errors import NotFoundAppError
+from app.core.errors import ValidationAppError
 
 
 class ArchitectureService:
@@ -58,6 +61,105 @@ class ArchitectureService:
             "created_at": proposal.created_at.isoformat(),
         }
 
+    async def editable_node_parameters(self, *, project_id: str, node_id: str) -> dict[str, Any]:
+        proposal = await self._repository.latest(project_id)
+        node = _find_node(proposal, node_id)
+        editable_fields = _editable_fields_for_node(node.type)
+        return {
+            "architecture_id": proposal.id,
+            "node_id": node.id,
+            "node_type": node.type.value,
+            "editable_fields": editable_fields,
+            "current_parameters": {
+                field_name: node.parameters.get(field_name)
+                for field_name in editable_fields
+            },
+        }
+
+    async def preview_node_update(
+        self,
+        *,
+        project_id: str,
+        node_id: str,
+        parameter_patch: dict[str, Any],
+    ) -> dict[str, Any]:
+        proposal = await self._repository.latest(project_id)
+        node = _find_node(proposal, node_id)
+        normalized_patch = _validate_parameter_patch(node, parameter_patch)
+        return {
+            "architecture_id": proposal.id,
+            "node_id": node.id,
+            "changes": normalized_patch,
+            "impact": _impact_summary(node, normalized_patch),
+            "requires_reapply": True,
+            "requires_confirmation": _patch_requires_confirmation(normalized_patch),
+        }
+
+    async def create_updated_node_proposal(
+        self,
+        *,
+        project_id: str,
+        node_id: str,
+        parameter_patch: dict[str, Any],
+        change_reason: str,
+    ) -> ArchitectureProposal:
+        proposal = await self._repository.latest(project_id)
+        node = _find_node(proposal, node_id)
+        normalized_patch = _validate_parameter_patch(node, parameter_patch)
+        updated_spec = _proposal_spec_payload(proposal)
+        for raw_node in updated_spec["nodes"]:
+            if raw_node["id"] == node.id:
+                raw_node["parameters"] = {
+                    **raw_node["parameters"],
+                    **normalized_patch,
+                }
+                raw_node["rationale"] = _append_change_reason(
+                    raw_node["rationale"],
+                    change_reason,
+                )
+                break
+        return await self.create_next_proposal(
+            project_id=project_id,
+            spec_payload=updated_spec,
+            rationale_md=_append_change_reason(proposal.rationale_md, change_reason),
+            cloudbuild_yaml=proposal.cloudbuild_yaml,
+            gcloud_commands=proposal.gcloud_commands,
+        )
+
+    async def create_deleted_node_proposal(
+        self,
+        *,
+        project_id: str,
+        node_id: str,
+        confirmed: bool,
+        change_reason: str,
+    ) -> ArchitectureProposal:
+        if not confirmed:
+            raise ValidationAppError(
+                "node deletion requires explicit confirmation",
+                {"node_id": node_id},
+            )
+        proposal = await self._repository.latest(project_id)
+        _find_node(proposal, node_id)
+        updated_spec = _proposal_spec_payload(proposal)
+        updated_spec["nodes"] = [
+            node
+            for node in updated_spec["nodes"]
+            if node["id"] != node_id
+        ]
+        updated_spec["edges"] = [
+            edge
+            for edge in updated_spec["edges"]
+            if edge["from_node"] != node_id and edge["to_node"] != node_id
+        ]
+        return await self.create_next_proposal(
+            project_id=project_id,
+            spec_payload=updated_spec,
+            rationale_md=_append_change_reason(proposal.rationale_md, change_reason),
+            cloudbuild_yaml=proposal.cloudbuild_yaml,
+            gcloud_commands=proposal.gcloud_commands,
+        )
+
 
 def _node_payload(node: ArchitectureNode) -> dict[str, Any]:
     return {
@@ -79,3 +181,111 @@ def _edge_payload(edge: ArchitectureEdge) -> dict[str, Any]:
         "type": edge.type.value,
         "description": edge.description,
     }
+
+
+def _find_node(proposal: ArchitectureProposal, node_id: str) -> ArchitectureNode:
+    for node in proposal.spec.nodes:
+        if node.id == node_id:
+            return node
+    raise NotFoundAppError("architecture_node", f"{proposal.id}:{node_id}")
+
+
+def _editable_fields_for_node(node_type: ArchitectureNodeType) -> tuple[str, ...]:
+    editable_by_type = {
+        ArchitectureNodeType.CLOUD_RUN: (
+            "memory",
+            "cpu",
+            "min_instances",
+            "max_instances",
+            "allow_unauthenticated",
+        ),
+        ArchitectureNodeType.FIRESTORE: ("mode",),
+        ArchitectureNodeType.CLOUD_STORAGE: ("lifecycle_days",),
+        ArchitectureNodeType.SECRET_MANAGER: ("secret_names",),
+    }
+    return editable_by_type.get(node_type, ())
+
+
+def _validate_parameter_patch(
+    node: ArchitectureNode,
+    parameter_patch: dict[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(parameter_patch, dict) or not parameter_patch:
+        raise ValidationAppError("parameter_patch must be a non-empty object")
+    editable_fields = set(_editable_fields_for_node(node.type))
+    if not editable_fields:
+        raise ValidationAppError(
+            "node type has no editable parameters",
+            {"node_type": node.type.value},
+        )
+
+    normalized_patch: dict[str, Any] = {}
+    for field_name, value in parameter_patch.items():
+        if field_name not in editable_fields:
+            raise ValidationAppError(
+                "parameter is not editable for this node type",
+                {"node_type": node.type.value, "field_name": field_name},
+            )
+        normalized_patch[field_name] = _validate_parameter_value(field_name, value)
+    return normalized_patch
+
+
+def _validate_parameter_value(field_name: str, value: Any) -> Any:
+    if field_name in {"memory", "cpu", "mode"}:
+        if not isinstance(value, str) or not value.strip():
+            raise ValidationAppError(f"{field_name} must be a non-empty string")
+        return value.strip()
+    if field_name in {"min_instances", "max_instances", "lifecycle_days"}:
+        if not isinstance(value, int) or value < 0:
+            raise ValidationAppError(f"{field_name} must be a non-negative integer")
+        return value
+    if field_name == "allow_unauthenticated":
+        if not isinstance(value, bool):
+            raise ValidationAppError("allow_unauthenticated must be a boolean")
+        return value
+    if field_name == "secret_names":
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise ValidationAppError("secret_names must be a string list")
+        return [item.strip() for item in value if item.strip()]
+    raise ValidationAppError("unsupported editable parameter", {"field_name": field_name})
+
+
+def _patch_requires_confirmation(parameter_patch: dict[str, Any]) -> bool:
+    return parameter_patch.get("allow_unauthenticated") is True
+
+
+def _impact_summary(node: ArchitectureNode, parameter_patch: dict[str, Any]) -> dict[str, str]:
+    if _patch_requires_confirmation(parameter_patch):
+        security = "公開アクセスが有効になるため、認証・認可と公開範囲の確認が必要です。"
+    else:
+        security = "既存のセキュリティ境界を直接弱める変更は検出されていません。"
+
+    performance = "性能影響は軽微です。"
+    if "memory" in parameter_patch or "cpu" in parameter_patch:
+        performance = "Cloud Run のリソース配分が変わるため、応答性能と起動時間が変化する可能性があります。"
+
+    cost = "月額コストへの影響は小さい見込みです。"
+    if any(field in parameter_patch for field in ("memory", "cpu", "min_instances", "max_instances")):
+        cost = "Cloud Run の割り当てや常時起動数により月額コストが増減する可能性があります。"
+
+    return {
+        "summary": f"{node.name} のパラメータ変更は再Apply後に反映されます。",
+        "cost": cost,
+        "security": security,
+        "performance": performance,
+    }
+
+
+def _proposal_spec_payload(proposal: ArchitectureProposal) -> dict[str, Any]:
+    return {
+        "project_id": proposal.spec.project_id,
+        "region": proposal.spec.region,
+        "nodes": [_node_payload(node) for node in proposal.spec.nodes],
+        "edges": [_edge_payload(edge) for edge in proposal.spec.edges],
+    }
+
+
+def _append_change_reason(current_text: str, change_reason: str) -> str:
+    if not change_reason.strip():
+        return current_text
+    return f"{current_text.strip()}\n\n変更理由: {change_reason.strip()}"
