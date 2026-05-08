@@ -39,6 +39,9 @@ class SecurityFindingService:
     async def list_by_target(self, project_id: str, target_type: str, target_id: str) -> list[SecurityFinding]:
         return await self._repository.list_by_target(project_id, target_type, target_id)
 
+    async def list_by_project(self, project_id: str) -> list[SecurityFinding]:
+        return await self._repository.list_by_project(project_id)
+
 
 def _parse_finding(
     *,

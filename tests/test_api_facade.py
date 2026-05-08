@@ -1,5 +1,7 @@
 import unittest
 
+from app.approvals.repository import InMemoryApprovalRepository
+from app.approvals.service import ApprovalService
 from app.agents.runtime import AgentRuntime
 from app.agents.runtime import InMemoryAgentStore
 from app.agents.tool_guard import DEFAULT_TOOL_DEFINITIONS
@@ -7,16 +9,25 @@ from app.agents.tool_guard import ToolGuard
 from app.api.facade import StarGazerApiFacade
 from app.architectures.repository import InMemoryArchitectureRepository
 from app.architectures.service import ArchitectureService
+from app.codegen.repository import InMemoryCodeGenerationRepository
+from app.codegen.service import TargetAppCodeService
+from app.deployments.cloudbuild import LocalCloudBuildAdapter
+from app.deployments.repository import InMemoryDeploymentRepository
+from app.deployments.service import DeploymentService
+from app.ops.service import OpsDashboardService
 from app.documents.repository import InMemoryDocumentRepository
 from app.documents.service import DocumentService
 from app.projects.repository import InMemoryProjectRepository
 from app.projects.service import ProjectService
 from app.security.repository import InMemorySecurityFindingRepository
 from app.security.service import SecurityFindingService
+from app.timeline.repository import InMemoryTimelineRepository
+from app.timeline.service import TimelineService
 from app.workflows.demo import DemoArchitectGenerator
 from app.workflows.demo import DemoGcpPlannerGenerator
 from app.workflows.demo import DemoRequirementGenerator
 from app.workflows.demo import DemoSecurityEvaluator
+from app.workflows.apply import ApplyWorkflowService
 from app.workflows.designs import DesignWorkflowService
 from app.workflows.planning import PlanningWorkflowService
 from app.workflows.requirements import RequirementWorkflowService
@@ -27,6 +38,10 @@ def make_facade() -> StarGazerApiFacade:
     project_service = ProjectService(repository=InMemoryProjectRepository())
     document_service = DocumentService(InMemoryDocumentRepository())
     architecture_service = ArchitectureService(InMemoryArchitectureRepository())
+    deployment_service = DeploymentService(InMemoryDeploymentRepository())
+    finding_service = SecurityFindingService(InMemorySecurityFindingRepository())
+    timeline_service = TimelineService(InMemoryTimelineRepository())
+    code_service = TargetAppCodeService(InMemoryCodeGenerationRepository())
     agent_runtime = AgentRuntime(
         store=InMemoryAgentStore(),
         tool_guard=ToolGuard(DEFAULT_TOOL_DEFINITIONS),
@@ -55,9 +70,29 @@ def make_facade() -> StarGazerApiFacade:
         security_workflow=SecurityEvaluationWorkflowService(
             project_service=project_service,
             architecture_service=architecture_service,
-            finding_service=SecurityFindingService(InMemorySecurityFindingRepository()),
+            finding_service=finding_service,
             agent_runtime=agent_runtime,
             evaluator=DemoSecurityEvaluator(),
+        ),
+        apply_workflow=ApplyWorkflowService(
+            project_service=project_service,
+            architecture_service=architecture_service,
+            deployment_service=deployment_service,
+            cloudbuild_adapter=LocalCloudBuildAdapter(),
+        ),
+        architecture_service=architecture_service,
+        code_service=code_service,
+        ops_service=OpsDashboardService(
+            project_service=project_service,
+            architecture_service=architecture_service,
+            deployment_service=deployment_service,
+            finding_service=finding_service,
+            timeline_service=timeline_service,
+        ),
+        timeline_service=timeline_service,
+        approval_service=ApprovalService(
+            repository=InMemoryApprovalRepository(),
+            project_service=project_service,
         ),
     )
 
@@ -67,7 +102,6 @@ class StarGazerApiFacadeTests(unittest.IsolatedAsyncioTestCase):
         facade = make_facade()
 
         response = await facade.create_project(
-            owner_uid="user-1",
             name="Support Desk",
             idea="問い合わせ管理アプリ",
             request_id="request-1",
@@ -75,6 +109,7 @@ class StarGazerApiFacadeTests(unittest.IsolatedAsyncioTestCase):
         body = response.to_dict()
 
         self.assertIsNone(body["error"])
+        self.assertEqual(body["data"]["owner_uid"], "demo-user")
         self.assertEqual(body["data"]["phase"], "DRAFT")
         self.assertEqual(body["meta"]["request_id"], "request-1")
 
@@ -82,7 +117,6 @@ class StarGazerApiFacadeTests(unittest.IsolatedAsyncioTestCase):
         facade = make_facade()
 
         response = await facade.create_project(
-            owner_uid="user-1",
             name=" ",
             idea="問い合わせ管理アプリ",
             request_id="request-1",
@@ -96,7 +130,6 @@ class StarGazerApiFacadeTests(unittest.IsolatedAsyncioTestCase):
     async def test_transition_project_rejects_unknown_phase(self) -> None:
         facade = make_facade()
         create_response = await facade.create_project(
-            owner_uid="user-1",
             name="Support Desk",
             idea="問い合わせ管理アプリ",
         )
@@ -114,10 +147,27 @@ class StarGazerApiFacadeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["error"]["details"], {"next_phase": "UNKNOWN"})
         self.assertEqual(body["meta"]["request_id"], "request-2")
 
+    async def test_generate_follow_up_questions_returns_max_three_questions(self) -> None:
+        facade = make_facade()
+        create_response = await facade.create_project(
+            name="Support Desk",
+            idea="問い合わせ管理アプリ",
+        )
+        project_id = create_response.to_dict()["data"]["id"]
+
+        response = await facade.generate_follow_up_questions(
+            project_id=project_id,
+            form_responses={"users": "support"},
+        )
+        body = response.to_dict()
+
+        self.assertIsNone(body["error"])
+        self.assertEqual(body["data"]["run_status"], "SUCCEEDED")
+        self.assertLessEqual(len(body["data"]["follow_up_questions"]), 3)
+
     async def test_api_facade_runs_full_generation_pipeline(self) -> None:
         facade = make_facade()
         create_response = await facade.create_project(
-            owner_uid="user-1",
             name="Support Desk",
             idea="問い合わせ管理アプリ",
         )
@@ -161,6 +211,210 @@ class StarGazerApiFacadeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(security_body["error"])
         self.assertEqual(security_body["data"]["run_status"], "SUCCEEDED")
         self.assertEqual(security_body["data"]["findings"], 1)
+
+    async def test_generate_design_set_creates_required_and_recommended_design_docs(self) -> None:
+        facade = make_facade()
+        create_response = await facade.create_project(
+            name="Support Desk",
+            idea="問い合わせ管理アプリ",
+        )
+        project_id = create_response.to_dict()["data"]["id"]
+        await facade.generate_requirements(project_id=project_id)
+        await facade.decide_approval(
+            project_id=project_id,
+            gate="requirements",
+            decision="approved",
+        )
+
+        response = await facade.generate_design_set(project_id=project_id)
+        body = response.to_dict()
+
+        self.assertIsNone(body["error"])
+        self.assertEqual(
+            [item["doc_type"] for item in body["data"]],
+            [
+                "basic_design",
+                "api_design",
+                "data_design",
+                "adr",
+                "tasks",
+                "ops_design",
+                "security_design",
+            ],
+        )
+        self.assertTrue(all(item["run_status"] == "SUCCEEDED" for item in body["data"]))
+
+    async def test_generate_design_document_rejects_unknown_doc_type(self) -> None:
+        facade = make_facade()
+
+        response = await facade.generate_design_document(
+            project_id="project-1",
+            doc_type="unknown",
+        )
+        body = response.to_dict()
+
+        self.assertIsNone(body["data"])
+        self.assertEqual(body["error"]["code"], "VALIDATION_ERROR")
+
+    async def test_architecture_node_edit_preview_and_update_are_exposed(self) -> None:
+        facade = make_facade()
+        create_response = await facade.create_project(
+            name="Support Desk",
+            idea="問い合わせ管理アプリ",
+        )
+        project_id = create_response.to_dict()["data"]["id"]
+        await facade.generate_requirements(project_id=project_id)
+        await facade.decide_approval(
+            project_id=project_id,
+            gate="requirements",
+            decision="approved",
+        )
+        await facade.generate_basic_design(project_id=project_id)
+        await facade.decide_approval(
+            project_id=project_id,
+            gate="design",
+            decision="approved",
+        )
+        await facade.propose_architecture(
+            project_id=project_id,
+            target_project_id="demo-gcp-project",
+        )
+
+        editable_response = await facade.get_editable_architecture_node(
+            project_id=project_id,
+            node_id="backend",
+        )
+        preview_response = await facade.preview_architecture_node_update(
+            project_id=project_id,
+            node_id="backend",
+            parameter_patch={"memory": "1Gi"},
+        )
+        update_response = await facade.update_architecture_node(
+            project_id=project_id,
+            node_id="backend",
+            parameter_patch={"memory": "1Gi"},
+            change_reason="デモ負荷に備える",
+        )
+
+        self.assertIn("memory", editable_response.to_dict()["data"]["editable_fields"])
+        self.assertTrue(preview_response.to_dict()["data"]["requires_reapply"])
+        self.assertEqual(update_response.to_dict()["data"]["version"], 2)
+
+    async def test_apply_latest_architecture_deploys_after_architecture_approval(self) -> None:
+        facade = make_facade()
+        create_response = await facade.create_project(
+            name="Support Desk",
+            idea="問い合わせ管理アプリ",
+        )
+        project_id = create_response.to_dict()["data"]["id"]
+        await facade.generate_requirements(project_id=project_id)
+        await facade.decide_approval(
+            project_id=project_id,
+            gate="requirements",
+            decision="approved",
+        )
+        await facade.generate_basic_design(project_id=project_id)
+        await facade.decide_approval(
+            project_id=project_id,
+            gate="design",
+            decision="approved",
+        )
+        await facade.propose_architecture(
+            project_id=project_id,
+            target_project_id="demo-gcp-project",
+        )
+        await facade.decide_approval(
+            project_id=project_id,
+            gate="architecture",
+            decision="approved",
+        )
+
+        response = await facade.apply_latest_architecture(project_id=project_id)
+        project_response = await facade.get_project(project_id=project_id)
+        body = response.to_dict()
+
+        self.assertIsNone(body["error"])
+        self.assertEqual(body["data"]["status"], "succeeded")
+        self.assertTrue(body["data"]["deployed_url"].startswith("https://"))
+        self.assertEqual(project_response.to_dict()["data"]["phase"], "DEPLOYED")
+
+    async def test_generate_target_app_creates_template_package(self) -> None:
+        facade = make_facade()
+        create_response = await facade.create_project(
+            name="Support Desk",
+            idea="問い合わせ管理アプリ",
+        )
+        project_id = create_response.to_dict()["data"]["id"]
+
+        response = await facade.generate_target_app(
+            project_id=project_id,
+            app_name="Support Desk API",
+            collection_name="support_tickets",
+            fields=("subject", "message"),
+        )
+        latest_response = await facade.latest_target_app(project_id=project_id)
+
+        self.assertIsNone(response.to_dict()["error"])
+        self.assertIn(
+            {"path": "app/main.py"},
+            response.to_dict()["data"]["files"],
+        )
+        self.assertIn("cloudbuild.yaml", [item["path"] for item in latest_response.to_dict()["data"]["files"]])
+
+    async def test_ops_overview_returns_dashboard_sections(self) -> None:
+        facade = make_facade()
+        create_response = await facade.create_project(
+            name="Support Desk",
+            idea="問い合わせ管理アプリ",
+        )
+        project_id = create_response.to_dict()["data"]["id"]
+
+        response = await facade.ops_overview(project_id=project_id)
+        body = response.to_dict()
+
+        self.assertIsNone(body["error"])
+        self.assertIn("system_overview", body["data"])
+        self.assertIn("recommended_next_actions", body["data"])
+
+    async def test_agent_workflow_records_timeline_event(self) -> None:
+        facade = make_facade()
+        create_response = await facade.create_project(
+            name="Support Desk",
+            idea="問い合わせ管理アプリ",
+        )
+        project_id = create_response.to_dict()["data"]["id"]
+
+        await facade.generate_requirements(project_id=project_id)
+        response = await facade.timeline(project_id=project_id)
+        ops_response = await facade.ops_overview(project_id=project_id)
+
+        self.assertEqual(response.to_dict()["data"][0]["action"], "generated_requirements")
+        self.assertEqual(
+            ops_response.to_dict()["data"]["agent_actions"][0]["action"],
+            "generated_requirements",
+        )
+
+    async def test_decide_approval_advances_phase_and_records_history(self) -> None:
+        facade = make_facade()
+        create_response = await facade.create_project(
+            name="Support Desk",
+            idea="問い合わせ管理アプリ",
+        )
+        project_id = create_response.to_dict()["data"]["id"]
+        await facade.generate_requirements(project_id=project_id)
+
+        approval_response = await facade.decide_approval(
+            project_id=project_id,
+            gate="requirements",
+            decision="approved",
+            rationale="デモ用に承認",
+        )
+        approvals_response = await facade.list_approvals(project_id=project_id)
+        project_response = await facade.get_project(project_id=project_id)
+
+        self.assertIsNone(approval_response.to_dict()["error"])
+        self.assertEqual(project_response.to_dict()["data"]["phase"], "REQUIREMENT_APPROVED")
+        self.assertEqual(approvals_response.to_dict()["data"][0]["decided_by"], "demo-user")
 
 
 if __name__ == "__main__":

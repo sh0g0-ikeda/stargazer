@@ -98,6 +98,43 @@ class RequirementWorkflowServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(result.document)
         self.assertEqual(versions, [])
 
+    async def test_generate_follow_up_questions_transitions_project(self) -> None:
+        project_repository = InMemoryProjectRepository()
+        project_service = ProjectService(repository=project_repository)
+        workflow = RequirementWorkflowService(
+            project_service=project_service,
+            document_service=DocumentService(InMemoryDocumentRepository()),
+            agent_runtime=AgentRuntime(
+                store=InMemoryAgentStore(),
+                tool_guard=ToolGuard(DEFAULT_TOOL_DEFINITIONS),
+            ),
+            generator=WorkflowRequirementGenerator(
+                {
+                    "follow_up_questions": [
+                        "認証方式は必要ですか。",
+                        "保存したいデータは何ですか。",
+                    ],
+                    "requirements_doc_md": "# 要件定義書",
+                    "unresolved_items": [],
+                }
+            ),
+        )
+        project = await project_service.create_project(
+            owner_uid="user-1",
+            name="Support Desk",
+            idea="問い合わせ管理アプリ",
+        )
+
+        result = await workflow.generate_follow_up_questions(
+            project_id=project.id,
+            form_responses={"users": "support"},
+        )
+        updated_project = await project_repository.get(project.id)
+
+        self.assertEqual(result.run.status, AgentRunStatus.SUCCEEDED)
+        self.assertEqual(len(result.questions), 2)
+        self.assertEqual(updated_project.phase, ProjectPhase.REQUIREMENT_DRAFT)
+
     async def test_generate_requirements_rejects_unrelated_phase_before_agent_run(self) -> None:
         project_repository = InMemoryProjectRepository()
         project_service = ProjectService(repository=project_repository)

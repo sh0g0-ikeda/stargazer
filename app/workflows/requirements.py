@@ -8,6 +8,7 @@ from typing import Any
 
 from app.agents.requirement import RequirementAgent
 from app.agents.requirement import RequirementGenerator
+from app.agents.requirement import RequirementQuestionAgent
 from app.agents.roles import REQUIREMENT_AGENT
 from app.agents.runtime import AgentRuntime
 from app.agents.schemas import AgentRun
@@ -29,6 +30,14 @@ class RequirementWorkflowResult:
     document: Document | None
 
 
+@dataclass(frozen=True)
+class FollowUpQuestionWorkflowResult:
+    """Result from one follow-up question generation attempt."""
+
+    run: AgentRun
+    questions: list[str]
+
+
 class RequirementWorkflowService:
     """Generate and persist a requirements document for a project."""
 
@@ -44,6 +53,41 @@ class RequirementWorkflowService:
         self._document_service = document_service
         self._agent_runtime = agent_runtime
         self._generator = generator
+
+    async def generate_follow_up_questions(
+        self,
+        *,
+        project_id: str,
+        form_responses: dict[str, Any] | None = None,
+    ) -> FollowUpQuestionWorkflowResult:
+        project_payload = await self._project_service.get_project_payload(project_id)
+        project_phase = ProjectPhase(project_payload["phase"])
+        if project_phase is ProjectPhase.DRAFT:
+            project = await self._project_service.transition_project(
+                project_id=project_id,
+                next_phase=ProjectPhase.REQUIREMENT_DRAFT,
+            )
+            project_phase = project.phase
+        elif project_phase is not ProjectPhase.REQUIREMENT_DRAFT:
+            raise PhaseConflictAppError(project_phase.value, ProjectPhase.REQUIREMENT_DRAFT.value)
+
+        input_snapshot = {
+            "idea": project_payload["idea"],
+            "form_responses": form_responses or {},
+            "follow_up_answers": {},
+        }
+        run = await self._agent_runtime.run_agent(
+            project_id=project_id,
+            project_phase=project_phase.value,
+            role=REQUIREMENT_AGENT,
+            agent_path="/root/requirement_question_agent",
+            agent=RequirementQuestionAgent(self._generator),
+            input_snapshot=input_snapshot,
+        )
+        questions = []
+        if run.status is AgentRunStatus.SUCCEEDED and run.output is not None:
+            questions = list(run.output["follow_up_questions"])
+        return FollowUpQuestionWorkflowResult(run=run, questions=questions)
 
     async def generate_requirements(
         self,
