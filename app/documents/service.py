@@ -50,6 +50,11 @@ class DocumentService:
         payload["references"] = list(document.references)
         return payload
 
+    async def latest_document(self, project_id: str, doc_type: DocumentType) -> Document:
+        """Return the latest immutable document version."""
+
+        return await self._repository.latest(project_id, doc_type)
+
 
 def _hash_prompt(prompt_text: str) -> str:
     if not prompt_text.strip():
