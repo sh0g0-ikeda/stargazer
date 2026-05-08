@@ -1,4 +1,4 @@
-"""Execution runtime for Star Gazer agents."""
+"""Execution runtime for CastorOps agents."""
 
 from __future__ import annotations
 

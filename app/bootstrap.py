@@ -6,7 +6,7 @@ from app.agents.runtime import AgentRuntime
 from app.agents.runtime import InMemoryAgentStore
 from app.agents.tool_guard import DEFAULT_TOOL_DEFINITIONS
 from app.agents.tool_guard import ToolGuard
-from app.api.facade import StarGazerApiFacade
+from app.api.facade import CastorOpsApiFacade
 from app.approvals.repository import InMemoryApprovalRepository
 from app.approvals.service import ApprovalService
 from app.architectures.repository import InMemoryArchitectureRepository
@@ -36,7 +36,7 @@ from app.workflows.requirements import RequirementWorkflowService
 from app.workflows.security import SecurityEvaluationWorkflowService
 
 
-def build_demo_facade() -> StarGazerApiFacade:
+def build_demo_facade() -> CastorOpsApiFacade:
     """Build a fully wired in-memory facade for hackathon demo mode."""
 
     project_service = ProjectService(repository=InMemoryProjectRepository())
@@ -50,7 +50,7 @@ def build_demo_facade() -> StarGazerApiFacade:
         store=InMemoryAgentStore(),
         tool_guard=ToolGuard(DEFAULT_TOOL_DEFINITIONS),
     )
-    return StarGazerApiFacade(
+    return CastorOpsApiFacade(
         project_service=project_service,
         requirement_workflow=RequirementWorkflowService(
             project_service=project_service,

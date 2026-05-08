@@ -31,7 +31,7 @@ class ProjectPhase(str, Enum):
 
 @dataclass
 class Project:
-    """User project tracked by Star Gazer."""
+    """User project tracked by CastorOps."""
 
     id: str
     owner_uid: str

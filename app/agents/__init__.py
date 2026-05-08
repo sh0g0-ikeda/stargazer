@@ -1,4 +1,4 @@
-"""Agent runtime primitives for Star Gazer."""
+"""Agent runtime primitives for CastorOps."""
 
 from app.agents.runtime import AgentRuntime
 from app.agents.runtime import InMemoryAgentStore

@@ -1,4 +1,4 @@
-"""Run the local end-to-end Star Gazer workflow demo."""
+"""Run the local end-to-end CastorOps workflow demo."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from app.api.responses import ApiResponse
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run Star Gazer local E2E workflow demo.")
+    parser = argparse.ArgumentParser(description="Run CastorOps local E2E workflow demo.")
     parser.add_argument("--idea", required=True, help="Project idea text.")
     parser.add_argument("--owner-uid", default="local-user", help="Owner user id.")
     parser.add_argument("--target-project-id", default="demo-gcp-project", help="Target GCP project id.")

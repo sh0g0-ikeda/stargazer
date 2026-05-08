@@ -83,7 +83,7 @@ class DemoGcpPlannerGenerator:
                     {
                         "id": "backend",
                         "type": "cloud_run",
-                        "name": "Star Gazer Backend",
+                        "name": "CastorOps Backend",
                         "parameters": {"memory": "512Mi", "cpu": "1"},
                         "rationale": "FastAPI backendをCloud Runで公開する",
                         "cost_band": "low",
