@@ -1,1 +1,1 @@
-"""Star Gazer backend package."""
+"""CastorOps backend package."""

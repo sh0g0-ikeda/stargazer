@@ -28,7 +28,7 @@ from app.workflows.requirements import RequirementWorkflowService
 from app.workflows.security import SecurityEvaluationWorkflowService
 
 
-class StarGazerApiFacade:
+class CastorOpsApiFacade:
     """Application-facing operations exposed by the backend API."""
 
     def __init__(

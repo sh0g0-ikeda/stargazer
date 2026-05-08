@@ -1,2 +1,2 @@
-"""Authentication boundaries for Star Gazer."""
+"""Authentication boundaries for CastorOps."""
 

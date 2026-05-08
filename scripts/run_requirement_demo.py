@@ -16,7 +16,7 @@ from app.workflows.demo import build_requirement_demo_response
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run Star Gazer requirement workflow demo.")
+    parser = argparse.ArgumentParser(description="Run CastorOps requirement workflow demo.")
     parser.add_argument("--idea", required=True, help="Project idea text.")
     parser.add_argument("--owner-uid", default="local-user", help="Owner user id.")
     return parser.parse_args()

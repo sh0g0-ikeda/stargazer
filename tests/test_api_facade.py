@@ -6,7 +6,7 @@ from app.agents.runtime import AgentRuntime
 from app.agents.runtime import InMemoryAgentStore
 from app.agents.tool_guard import DEFAULT_TOOL_DEFINITIONS
 from app.agents.tool_guard import ToolGuard
-from app.api.facade import StarGazerApiFacade
+from app.api.facade import CastorOpsApiFacade
 from app.architectures.repository import InMemoryArchitectureRepository
 from app.architectures.service import ArchitectureService
 from app.codegen.repository import InMemoryCodeGenerationRepository
@@ -34,7 +34,7 @@ from app.workflows.requirements import RequirementWorkflowService
 from app.workflows.security import SecurityEvaluationWorkflowService
 
 
-def make_facade() -> StarGazerApiFacade:
+def make_facade() -> CastorOpsApiFacade:
     project_service = ProjectService(repository=InMemoryProjectRepository())
     document_service = DocumentService(InMemoryDocumentRepository())
     architecture_service = ArchitectureService(InMemoryArchitectureRepository())
@@ -46,7 +46,7 @@ def make_facade() -> StarGazerApiFacade:
         store=InMemoryAgentStore(),
         tool_guard=ToolGuard(DEFAULT_TOOL_DEFINITIONS),
     )
-    return StarGazerApiFacade(
+    return CastorOpsApiFacade(
         project_service=project_service,
         requirement_workflow=RequirementWorkflowService(
             project_service=project_service,
@@ -97,7 +97,7 @@ def make_facade() -> StarGazerApiFacade:
     )
 
 
-class StarGazerApiFacadeTests(unittest.IsolatedAsyncioTestCase):
+class CastorOpsApiFacadeTests(unittest.IsolatedAsyncioTestCase):
     async def test_create_project_returns_api_response(self) -> None:
         facade = make_facade()
 
