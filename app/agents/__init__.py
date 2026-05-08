@@ -1,6 +1,7 @@
 """Agent runtime primitives for Star Gazer."""
 
 from app.agents.architect import ArchitectAgent
+from app.agents.gcp_planner import GcpPlannerAgent
 from app.agents.runtime import AgentRuntime
 from app.agents.runtime import InMemoryAgentStore
 from app.agents.schemas import AgentEvent
@@ -16,6 +17,7 @@ __all__ = [
     "AgentRunStatus",
     "AgentRuntime",
     "ArchitectAgent",
+    "GcpPlannerAgent",
     "InMemoryAgentStore",
     "ProgressUpdate",
     "RequirementAgent",
