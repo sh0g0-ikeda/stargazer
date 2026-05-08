@@ -98,5 +98,5 @@ tests/
 The canonical GitHub repository is:
 
 ```text
-https://github.com/sh0g0-ikeda/castorops
+https://github.com/sh0g0-ikeda/CastorOps
 ```
