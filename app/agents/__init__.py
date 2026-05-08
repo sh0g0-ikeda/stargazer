@@ -6,6 +6,7 @@ from app.agents.schemas import AgentEvent
 from app.agents.schemas import AgentRun
 from app.agents.schemas import AgentRunStatus
 from app.agents.schemas import ProgressUpdate
+from app.agents.requirement import RequirementAgent
 from app.agents.tool_guard import ToolGuard
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "AgentRuntime",
     "InMemoryAgentStore",
     "ProgressUpdate",
+    "RequirementAgent",
     "ToolGuard",
 ]
