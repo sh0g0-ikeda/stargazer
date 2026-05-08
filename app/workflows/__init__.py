@@ -6,6 +6,8 @@ from app.workflows.planning import PlanningWorkflowResult
 from app.workflows.planning import PlanningWorkflowService
 from app.workflows.requirements import RequirementWorkflowResult
 from app.workflows.requirements import RequirementWorkflowService
+from app.workflows.security import SecurityEvaluationWorkflowResult
+from app.workflows.security import SecurityEvaluationWorkflowService
 
 __all__ = [
     "DesignWorkflowResult",
@@ -14,4 +16,6 @@ __all__ = [
     "PlanningWorkflowService",
     "RequirementWorkflowResult",
     "RequirementWorkflowService",
+    "SecurityEvaluationWorkflowResult",
+    "SecurityEvaluationWorkflowService",
 ]
