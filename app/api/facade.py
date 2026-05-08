@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from app.api.responses import ApiResponse
 from app.core.errors import AppError
+from app.core.errors import ValidationAppError
 from app.documents.models import DocumentType
+from app.projects.models import ProjectPhase
 from app.projects.service import ProjectService
 from app.workflows.designs import DesignWorkflowService
 from app.workflows.planning import PlanningWorkflowService
@@ -67,6 +69,32 @@ class StarGazerApiFacade:
         except AppError as exc:
             return ApiResponse.failed(exc, request_id=request_id)
         return ApiResponse.ok(payload, request_id=request_id)
+
+    async def transition_project(
+        self,
+        *,
+        project_id: str,
+        next_phase: str,
+        request_id: str | None = None,
+    ) -> ApiResponse:
+        try:
+            parsed_next_phase = ProjectPhase(next_phase)
+            project = await self._project_service.transition_project(
+                project_id=project_id,
+                next_phase=parsed_next_phase,
+            )
+        except ValueError:
+            error = ValidationAppError("next_phase is not supported", {"next_phase": next_phase})
+            return ApiResponse.failed(error, request_id=request_id)
+        except AppError as exc:
+            return ApiResponse.failed(exc, request_id=request_id)
+        return ApiResponse.ok(
+            {
+                "id": project.id,
+                "phase": project.phase.value,
+            },
+            request_id=request_id,
+        )
 
     async def generate_requirements(
         self,

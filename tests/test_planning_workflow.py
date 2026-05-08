@@ -9,6 +9,7 @@ from app.agents.tool_guard import DEFAULT_TOOL_DEFINITIONS
 from app.agents.tool_guard import ToolGuard
 from app.architectures.repository import InMemoryArchitectureRepository
 from app.architectures.service import ArchitectureService
+from app.core.errors import NotFoundAppError
 from app.core.errors import PhaseConflictAppError
 from app.documents.models import DocumentType
 from app.documents.repository import InMemoryDocumentRepository
@@ -149,6 +150,39 @@ class PlanningWorkflowServiceTests(unittest.IsolatedAsyncioTestCase):
                 project_id=project.id,
                 target_project_id="gcp-project",
             )
+
+    async def test_missing_basic_design_document_does_not_advance_phase(self) -> None:
+        project_service, project_repository, document_service, _, workflow = await make_workflow(
+            {
+                "architecture_spec": valid_spec(),
+                "rationale_md": "Use Cloud Run",
+                "cloudbuild_yaml": "steps: []",
+                "gcloud_commands": ["gcloud run services list"],
+            }
+        )
+        project = await project_service.create_project(
+            owner_uid="user-1",
+            name="Support Desk",
+            idea="Support desk app",
+        )
+        project.update_phase(ProjectPhase.DESIGN_APPROVED)
+        await project_repository.update(project)
+        await document_service.create_next_version(
+            project_id=project.id,
+            doc_type=DocumentType.REQUIREMENTS,
+            content_md="# Requirements",
+            generated_by="requirement_agent",
+            prompt_text="requirements prompt",
+        )
+
+        with self.assertRaises(NotFoundAppError):
+            await workflow.propose_architecture(
+                project_id=project.id,
+                target_project_id="gcp-project",
+            )
+
+        updated_project = await project_repository.get(project.id)
+        self.assertEqual(updated_project.phase, ProjectPhase.DESIGN_APPROVED)
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ from app.agents.tool_guard import DEFAULT_TOOL_DEFINITIONS
 from app.agents.tool_guard import ToolGuard
 from app.architectures.repository import InMemoryArchitectureRepository
 from app.architectures.service import ArchitectureService
+from app.core.errors import NotFoundAppError
 from app.core.errors import PhaseConflictAppError
 from app.projects.models import ProjectPhase
 from app.projects.repository import InMemoryProjectRepository
@@ -129,6 +130,24 @@ class SecurityEvaluationWorkflowServiceTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(PhaseConflictAppError):
             await workflow.evaluate_latest_architecture(project_id=project.id)
+
+    async def test_missing_architecture_does_not_advance_phase(self) -> None:
+        project_service, project_repository, _, _, workflow = await make_workflow(
+            {"findings": []}
+        )
+        project = await project_service.create_project(
+            owner_uid="user-1",
+            name="Support Desk",
+            idea="Support desk app",
+        )
+        project.update_phase(ProjectPhase.ARCHITECTURE_DRAFT)
+        await project_repository.update(project)
+
+        with self.assertRaises(NotFoundAppError):
+            await workflow.evaluate_latest_architecture(project_id=project.id)
+
+        updated_project = await project_repository.get(project.id)
+        self.assertEqual(updated_project.phase, ProjectPhase.ARCHITECTURE_DRAFT)
 
 
 if __name__ == "__main__":

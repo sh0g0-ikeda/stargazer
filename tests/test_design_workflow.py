@@ -7,6 +7,7 @@ from app.agents.runtime import InMemoryAgentStore
 from app.agents.schemas import AgentRunStatus
 from app.agents.tool_guard import DEFAULT_TOOL_DEFINITIONS
 from app.agents.tool_guard import ToolGuard
+from app.core.errors import NotFoundAppError
 from app.core.errors import PhaseConflictAppError
 from app.core.errors import ValidationAppError
 from app.documents.models import DocumentType
@@ -124,6 +125,27 @@ class DesignWorkflowServiceTests(unittest.IsolatedAsyncioTestCase):
                 project_id=project.id,
                 doc_type=DocumentType.BASIC_DESIGN,
             )
+
+    async def test_missing_requirements_document_does_not_advance_phase(self) -> None:
+        project_service, project_repository, _, _, workflow = await make_design_workflow(
+            {"doc_md": "# Basic Design"}
+        )
+        project = await project_service.create_project(
+            owner_uid="user-1",
+            name="Support Desk",
+            idea="Support desk app",
+        )
+        project.update_phase(ProjectPhase.REQUIREMENT_APPROVED)
+        await project_repository.update(project)
+
+        with self.assertRaises(NotFoundAppError):
+            await workflow.generate_design_document(
+                project_id=project.id,
+                doc_type=DocumentType.BASIC_DESIGN,
+            )
+
+        updated_project = await project_repository.get(project.id)
+        self.assertEqual(updated_project.phase, ProjectPhase.REQUIREMENT_APPROVED)
 
 
 if __name__ == "__main__":
