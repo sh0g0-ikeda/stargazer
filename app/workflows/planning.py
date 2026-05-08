@@ -54,13 +54,7 @@ class PlanningWorkflowService:
     ) -> PlanningWorkflowResult:
         project_payload = await self._project_service.get_project_payload(project_id)
         project_phase = ProjectPhase(project_payload["phase"])
-        if project_phase is ProjectPhase.DESIGN_APPROVED:
-            project = await self._project_service.transition_project(
-                project_id=project_id,
-                next_phase=ProjectPhase.ARCHITECTURE_DRAFT,
-            )
-            project_phase = project.phase
-        elif project_phase is not ProjectPhase.ARCHITECTURE_DRAFT:
+        if project_phase not in {ProjectPhase.DESIGN_APPROVED, ProjectPhase.ARCHITECTURE_DRAFT}:
             raise PhaseConflictAppError(project_phase.value, ProjectPhase.ARCHITECTURE_DRAFT.value)
 
         requirements_document = await self._document_service.latest_document(
@@ -71,6 +65,13 @@ class PlanningWorkflowService:
             project_id,
             DocumentType.BASIC_DESIGN,
         )
+        if project_phase is ProjectPhase.DESIGN_APPROVED:
+            project = await self._project_service.transition_project(
+                project_id=project_id,
+                next_phase=ProjectPhase.ARCHITECTURE_DRAFT,
+            )
+            project_phase = project.phase
+
         input_snapshot = {
             "requirements_doc_md": requirements_document.content_md,
             "basic_design_md": basic_design_document.content_md,

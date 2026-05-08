@@ -50,16 +50,17 @@ class SecurityEvaluationWorkflowService:
     async def evaluate_latest_architecture(self, *, project_id: str) -> SecurityEvaluationWorkflowResult:
         project_payload = await self._project_service.get_project_payload(project_id)
         project_phase = ProjectPhase(project_payload["phase"])
+        if project_phase not in {ProjectPhase.ARCHITECTURE_DRAFT, ProjectPhase.SECURITY_REVIEW}:
+            raise PhaseConflictAppError(project_phase.value, ProjectPhase.SECURITY_REVIEW.value)
+
+        architecture_payload = await self._architecture_service.latest_payload(project_id)
         if project_phase is ProjectPhase.ARCHITECTURE_DRAFT:
             project = await self._project_service.transition_project(
                 project_id=project_id,
                 next_phase=ProjectPhase.SECURITY_REVIEW,
             )
             project_phase = project.phase
-        elif project_phase is not ProjectPhase.SECURITY_REVIEW:
-            raise PhaseConflictAppError(project_phase.value, ProjectPhase.SECURITY_REVIEW.value)
 
-        architecture_payload = await self._architecture_service.latest_payload(project_id)
         run = await self._agent_runtime.run_agent(
             project_id=project_id,
             project_phase=project_phase.value,
