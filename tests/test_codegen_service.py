@@ -17,10 +17,23 @@ class TargetAppCodeServiceTests(unittest.IsolatedAsyncioTestCase):
         )
         paths = {generated_file.path for generated_file in result.files}
         payload = await service.latest_payload("project-1")
+        cloudbuild_yaml = next(
+            generated_file.content
+            for generated_file in result.files
+            if generated_file.path == "cloudbuild.yaml"
+        )
+        dockerfile = next(
+            generated_file.content
+            for generated_file in result.files
+            if generated_file.path == "Dockerfile"
+        )
 
         self.assertIn("app/main.py", paths)
         self.assertIn("Dockerfile", paths)
         self.assertIn("cloudbuild.yaml", paths)
+        self.assertIn("id: deploy", cloudbuild_yaml)
+        self.assertIn("gcloud", cloudbuild_yaml)
+        self.assertIn("${PORT:-8080}", dockerfile)
         self.assertEqual(payload["app_name"], "Support Desk API")
 
     async def test_generate_inquiry_api_rejects_unsafe_field_name(self) -> None:

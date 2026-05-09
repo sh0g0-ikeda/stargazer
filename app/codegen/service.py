@@ -75,7 +75,7 @@ def _render_files(
                 "COPY requirements.txt .\n"
                 "RUN pip install --no-cache-dir -r requirements.txt\n"
                 "COPY app ./app\n"
-                'CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]\n'
+                'CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]\n'
             ),
         ),
         GeneratedFile(
@@ -130,6 +130,23 @@ def _render_files(
                 "  - id: build\n"
                 "    name: gcr.io/cloud-builders/docker\n"
                 "    args: ['build', '-t', '$_IMAGE', '.']\n"
+                "  - id: push\n"
+                "    name: gcr.io/cloud-builders/docker\n"
+                "    args: ['push', '$_IMAGE']\n"
+                "  - id: deploy\n"
+                "    name: gcr.io/google.com/cloudsdktool/cloud-sdk\n"
+                "    entrypoint: gcloud\n"
+                "    args:\n"
+                "      - run\n"
+                "      - deploy\n"
+                "      - $_SERVICE\n"
+                "      - --image=$_IMAGE\n"
+                "      - --region=$_REGION\n"
+                "      - --platform=managed\n"
+                "      - --allow-unauthenticated\n"
+                "      - --quiet\n"
+                "images:\n"
+                "  - $_IMAGE\n"
             ),
         ),
     )

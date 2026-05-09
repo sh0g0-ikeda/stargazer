@@ -1,0 +1,14 @@
+CastorOps
+Copyright (c) 2026 Shogo Ikeda
+
+CastorOps is an original hackathon project. It does not fork, vendor, copy,
+or redistribute OpenAI Codex source code.
+
+The agent runtime design was informed by publicly available OpenAI Codex
+concepts, including explicit tool boundaries, approval gates for side effects,
+structured progress tracking, and validated agent outputs. Those concepts are
+used as design references only.
+
+OpenAI, Codex, Gemini, Google Cloud, Cloud Run, Cloud Build, Firestore, and
+other third-party names may be trademarks of their respective owners. This
+project does not use third-party logos or branding assets.
