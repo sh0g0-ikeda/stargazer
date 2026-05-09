@@ -18,15 +18,17 @@ Implemented:
 - Local Cloud Build deployment simulation.
 - Ops dashboard summary sections.
 - Timeline events and SSE event encoding helpers.
+- Dependency-free local demo HTTP server and static UI.
+- Container runtime for Cloud Run.
+- Cloud Build pipeline for testing, building, pushing, and deploying CastorOps.
+- GitHub Actions CI for compile, unit tests, and secret pattern smoke checks.
 
 Not implemented in this repository yet:
 
-- Production FastAPI HTTP server wiring.
 - Persistent Firestore / Cloud Storage adapters.
 - Live Vertex AI / Gemini provider adapter.
-- Live Cloud Build / Cloud Run deployment execution.
-- Frontend UI.
-- Authentication for production usage.
+- Live Cloud Build / Cloud Run architecture-apply adapter.
+- Authentication for production usage. The hackathon demo uses a single demo identity.
 
 ## Design Document
 
@@ -79,6 +81,33 @@ Then open:
 http://127.0.0.1:8080
 ```
 
+Run the same server in a container:
+
+```powershell
+docker build -t castorops:local .
+docker run --rm -p 8080:8080 -e PORT=8080 -e HOST=0.0.0.0 castorops:local
+```
+
+Deploy CastorOps itself through Cloud Build:
+
+```powershell
+.\scripts\deploy_self.ps1 -ProjectId "your-gcp-project" -Region "asia-northeast1" -Service "castorops" -TargetProjectId "demo-gcp-project"
+```
+
+The deployment command requires a configured `gcloud` CLI, an active billing account, and the required Google Cloud APIs enabled for the target project.
+
+## Configuration And Secrets
+
+The local demo does not require secrets.
+
+For a Cloud Run demo deployment:
+
+- `PORT` is provided by Cloud Run.
+- `HOST` defaults to `0.0.0.0` in the container.
+- `TARGET_PROJECT_ID` controls the target GCP project id shown in generated plans.
+
+Do not commit `.env`, service account keys, API keys, OAuth secrets, or downloaded credentials. Use Cloud Run environment variables and Secret Manager for real credentials when live adapters are introduced.
+
 ## Repository Layout
 
 ```text
@@ -101,12 +130,18 @@ app/
   web/             Dependency-free local demo HTTP server and static UI.
   workflows/       Requirement, design, planning, security, apply, and demo workflows.
 scripts/
+  deploy_self.ps1
   run_full_demo.py
   run_requirement_demo.py
   serve_demo.py
 tests/
   unittest-based behavior tests.
 ```
+
+## License And Notices
+
+- [LICENSE](LICENSE)
+- [NOTICE](NOTICE)
 
 ## Git Remote
 

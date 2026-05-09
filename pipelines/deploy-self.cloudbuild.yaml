@@ -1,0 +1,64 @@
+substitutions:
+  _REGION: asia-northeast1
+  _SERVICE: castorops
+  _REPOSITORY: castorops
+  _TARGET_PROJECT_ID: demo-gcp-project
+
+steps:
+  - id: test
+    name: python:3.12-slim
+    entrypoint: python
+    args:
+      - -m
+      - unittest
+      - discover
+      - -s
+      - tests
+      - -v
+
+  - id: ensure-artifact-registry
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -lc
+      - >-
+        gcloud artifacts repositories describe ${_REPOSITORY}
+        --location=${_REGION}
+        --project=${PROJECT_ID}
+        ||
+        gcloud artifacts repositories create ${_REPOSITORY}
+        --repository-format=docker
+        --location=${_REGION}
+        --project=${PROJECT_ID}
+        --quiet
+
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE}:${SHORT_SHA}
+      - .
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE}:${SHORT_SHA}
+
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE}:${SHORT_SHA}
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --set-env-vars=TARGET_PROJECT_ID=${_TARGET_PROJECT_ID}
+      - --quiet
+
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE}:${SHORT_SHA}
