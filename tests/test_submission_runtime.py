@@ -33,6 +33,8 @@ class SubmissionRuntimeTests(unittest.TestCase):
         self.assertIn("docker", cloudbuild)
         self.assertIn("run", cloudbuild)
         self.assertIn("deploy", cloudbuild)
+        self.assertIn("${BUILD_ID}", cloudbuild)
+        self.assertNotIn("${SHORT_SHA}", cloudbuild)
         self.assertIn("--set-env-vars=TARGET_PROJECT_ID=${_TARGET_PROJECT_ID}", cloudbuild)
 
 
